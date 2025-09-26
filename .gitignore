@@ -1,0 +1,8 @@
+.env
+.env.cli
+.idea/
+.obsidian/
+.claude/
+local/
+mysql/
+

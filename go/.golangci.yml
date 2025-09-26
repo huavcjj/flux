@@ -1,0 +1,13 @@
+linters:
+  enable:
+    - govet
+    - errcheck
+    - gosimple
+    - staticcheck
+    - unused
+    - gofmt
+    - goimports
+
+issues:
+  exclude-dirs:
+    - "tmp"
