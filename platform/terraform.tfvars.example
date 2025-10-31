@@ -1,0 +1,15 @@
+# Copy this file to terraform.tfvars and fill in your values
+
+project_id        = "your-gcp-project-id"
+region            = "asia-northeast1"
+pubsub_topic_name = "gmail-notifications"
+webhook_url       = "https://your-domain.com/webhook/pubsub"
+
+# OAuth settings (will be automatically created by Terraform)
+oauth_client_id     = "xxx.apps.googleusercontent.com"
+oauth_client_secret = "xxx"
+oauth_redirect_uri = "https://your-domain.com/oauth/gmail/callback"
+
+# LINE Messaging API credentials (optional - for Secret Manager if billing enabled)
+line_channel_token  = "your-line-channel-token"
+line_channel_secret = "your-line-channel-secret"
