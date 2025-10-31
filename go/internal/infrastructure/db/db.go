@@ -27,6 +27,18 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	if q.createUserStmt, err = db.PrepareContext(ctx, createUser); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateUser: %w", err)
 	}
+	if q.getAllActiveUsersStmt, err = db.PrepareContext(ctx, getAllActiveUsers); err != nil {
+		return nil, fmt.Errorf("error preparing query GetAllActiveUsers: %w", err)
+	}
+	if q.getUserByIDStmt, err = db.PrepareContext(ctx, getUserByID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserByID: %w", err)
+	}
+	if q.getUserByLineUserIDStmt, err = db.PrepareContext(ctx, getUserByLineUserID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUserByLineUserID: %w", err)
+	}
+	if q.updateUserGmailTokensStmt, err = db.PrepareContext(ctx, updateUserGmailTokens); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateUserGmailTokens: %w", err)
+	}
 	return &q, nil
 }
 
@@ -35,6 +47,26 @@ func (q *Queries) Close() error {
 	if q.createUserStmt != nil {
 		if cerr := q.createUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createUserStmt: %w", cerr)
+		}
+	}
+	if q.getAllActiveUsersStmt != nil {
+		if cerr := q.getAllActiveUsersStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getAllActiveUsersStmt: %w", cerr)
+		}
+	}
+	if q.getUserByIDStmt != nil {
+		if cerr := q.getUserByIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserByIDStmt: %w", cerr)
+		}
+	}
+	if q.getUserByLineUserIDStmt != nil {
+		if cerr := q.getUserByLineUserIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUserByLineUserIDStmt: %w", cerr)
+		}
+	}
+	if q.updateUserGmailTokensStmt != nil {
+		if cerr := q.updateUserGmailTokensStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateUserGmailTokensStmt: %w", cerr)
 		}
 	}
 	return err
@@ -74,15 +106,23 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db             DBTX
-	tx             *sql.Tx
-	createUserStmt *sql.Stmt
+	db                        DBTX
+	tx                        *sql.Tx
+	createUserStmt            *sql.Stmt
+	getAllActiveUsersStmt     *sql.Stmt
+	getUserByIDStmt           *sql.Stmt
+	getUserByLineUserIDStmt   *sql.Stmt
+	updateUserGmailTokensStmt *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:             tx,
-		tx:             tx,
-		createUserStmt: q.createUserStmt,
+		db:                        tx,
+		tx:                        tx,
+		createUserStmt:            q.createUserStmt,
+		getAllActiveUsersStmt:     q.getAllActiveUsersStmt,
+		getUserByIDStmt:           q.getUserByIDStmt,
+		getUserByLineUserIDStmt:   q.getUserByLineUserIDStmt,
+		updateUserGmailTokensStmt: q.updateUserGmailTokensStmt,
 	}
 }

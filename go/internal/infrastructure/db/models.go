@@ -6,7 +6,21 @@ package db
 
 import (
 	"database/sql"
+	"time"
 )
+
+type Email struct {
+	ID             uint64         `db:"id" json:"id"`
+	UserID         int64          `db:"user_id" json:"user_id"`
+	GmailMessageID string         `db:"gmail_message_id" json:"gmail_message_id"`
+	SenderEmail    string         `db:"sender_email" json:"sender_email"`
+	Subject        sql.NullString `db:"subject" json:"subject"`
+	BodyPreview    sql.NullString `db:"body_preview" json:"body_preview"`
+	ReceivedAt     time.Time      `db:"received_at" json:"received_at"`
+	IsNotified     sql.NullBool   `db:"is_notified" json:"is_notified"`
+	CreatedAt      sql.NullTime   `db:"created_at" json:"created_at"`
+	UpdatedAt      sql.NullTime   `db:"updated_at" json:"updated_at"`
+}
 
 type User struct {
 	ID                  string         `db:"id" json:"id"`
@@ -17,4 +31,5 @@ type User struct {
 	IsActive            sql.NullBool   `db:"is_active" json:"is_active"`
 	CreatedAt           sql.NullTime   `db:"created_at" json:"created_at"`
 	UpdatedAt           sql.NullTime   `db:"updated_at" json:"updated_at"`
+	GmailHistoryID      sql.NullInt64  `db:"gmail_history_id" json:"gmail_history_id"`
 }

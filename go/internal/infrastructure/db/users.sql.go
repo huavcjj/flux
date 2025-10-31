@@ -42,3 +42,113 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (sql.Res
 		arg.IsActive,
 	)
 }
+
+const getAllActiveUsers = `-- name: GetAllActiveUsers :many
+SELECT id, line_user_id, gmail_access_token, gmail_refresh_token, gmail_token_expires_at, is_active, created_at, updated_at, gmail_history_id FROM users
+WHERE is_active = true
+`
+
+func (q *Queries) GetAllActiveUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.query(ctx, q.getAllActiveUsersStmt, getAllActiveUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.LineUserID,
+			&i.GmailAccessToken,
+			&i.GmailRefreshToken,
+			&i.GmailTokenExpiresAt,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.GmailHistoryID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, line_user_id, gmail_access_token, gmail_refresh_token, gmail_token_expires_at, is_active, created_at, updated_at, gmail_history_id FROM users
+WHERE id = ? AND is_active = true
+LIMIT 1
+`
+
+func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
+	row := q.queryRow(ctx, q.getUserByIDStmt, getUserByID, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.LineUserID,
+		&i.GmailAccessToken,
+		&i.GmailRefreshToken,
+		&i.GmailTokenExpiresAt,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GmailHistoryID,
+	)
+	return i, err
+}
+
+const getUserByLineUserID = `-- name: GetUserByLineUserID :one
+SELECT id, line_user_id, gmail_access_token, gmail_refresh_token, gmail_token_expires_at, is_active, created_at, updated_at, gmail_history_id FROM users
+WHERE line_user_id = ? AND is_active = true
+LIMIT 1
+`
+
+func (q *Queries) GetUserByLineUserID(ctx context.Context, lineUserID string) (User, error) {
+	row := q.queryRow(ctx, q.getUserByLineUserIDStmt, getUserByLineUserID, lineUserID)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.LineUserID,
+		&i.GmailAccessToken,
+		&i.GmailRefreshToken,
+		&i.GmailTokenExpiresAt,
+		&i.IsActive,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.GmailHistoryID,
+	)
+	return i, err
+}
+
+const updateUserGmailTokens = `-- name: UpdateUserGmailTokens :exec
+UPDATE users
+SET gmail_access_token = ?,
+    gmail_refresh_token = ?,
+    gmail_token_expires_at = ?,
+    updated_at = CURRENT_TIMESTAMP
+WHERE line_user_id = ?
+`
+
+type UpdateUserGmailTokensParams struct {
+	GmailAccessToken    sql.NullString `db:"gmail_access_token" json:"gmail_access_token"`
+	GmailRefreshToken   sql.NullString `db:"gmail_refresh_token" json:"gmail_refresh_token"`
+	GmailTokenExpiresAt sql.NullInt64  `db:"gmail_token_expires_at" json:"gmail_token_expires_at"`
+	LineUserID          string         `db:"line_user_id" json:"line_user_id"`
+}
+
+func (q *Queries) UpdateUserGmailTokens(ctx context.Context, arg UpdateUserGmailTokensParams) error {
+	_, err := q.exec(ctx, q.updateUserGmailTokensStmt, updateUserGmailTokens,
+		arg.GmailAccessToken,
+		arg.GmailRefreshToken,
+		arg.GmailTokenExpiresAt,
+		arg.LineUserID,
+	)
+	return err
+}
