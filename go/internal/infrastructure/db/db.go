@@ -24,17 +24,41 @@ func New(db DBTX) *Queries {
 func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 	q := Queries{db: db}
 	var err error
+	if q.createEmailStmt, err = db.PrepareContext(ctx, createEmail); err != nil {
+		return nil, fmt.Errorf("error preparing query CreateEmail: %w", err)
+	}
 	if q.createUserStmt, err = db.PrepareContext(ctx, createUser); err != nil {
 		return nil, fmt.Errorf("error preparing query CreateUser: %w", err)
 	}
+	if q.deleteEmailsByUserIDStmt, err = db.PrepareContext(ctx, deleteEmailsByUserID); err != nil {
+		return nil, fmt.Errorf("error preparing query DeleteEmailsByUserID: %w", err)
+	}
 	if q.getAllActiveUsersStmt, err = db.PrepareContext(ctx, getAllActiveUsers); err != nil {
 		return nil, fmt.Errorf("error preparing query GetAllActiveUsers: %w", err)
+	}
+	if q.getEmailByGmailMessageIDStmt, err = db.PrepareContext(ctx, getEmailByGmailMessageID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetEmailByGmailMessageID: %w", err)
+	}
+	if q.getEmailsByUserIDStmt, err = db.PrepareContext(ctx, getEmailsByUserID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetEmailsByUserID: %w", err)
+	}
+	if q.getRecentEmailsStmt, err = db.PrepareContext(ctx, getRecentEmails); err != nil {
+		return nil, fmt.Errorf("error preparing query GetRecentEmails: %w", err)
+	}
+	if q.getUnnotifiedEmailsByUserIDStmt, err = db.PrepareContext(ctx, getUnnotifiedEmailsByUserID); err != nil {
+		return nil, fmt.Errorf("error preparing query GetUnnotifiedEmailsByUserID: %w", err)
 	}
 	if q.getUserByIDStmt, err = db.PrepareContext(ctx, getUserByID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserByID: %w", err)
 	}
 	if q.getUserByLineUserIDStmt, err = db.PrepareContext(ctx, getUserByLineUserID); err != nil {
 		return nil, fmt.Errorf("error preparing query GetUserByLineUserID: %w", err)
+	}
+	if q.markEmailAsNotifiedStmt, err = db.PrepareContext(ctx, markEmailAsNotified); err != nil {
+		return nil, fmt.Errorf("error preparing query MarkEmailAsNotified: %w", err)
+	}
+	if q.updateEmailNotifiedStmt, err = db.PrepareContext(ctx, updateEmailNotified); err != nil {
+		return nil, fmt.Errorf("error preparing query UpdateEmailNotified: %w", err)
 	}
 	if q.updateUserGmailTokensStmt, err = db.PrepareContext(ctx, updateUserGmailTokens); err != nil {
 		return nil, fmt.Errorf("error preparing query UpdateUserGmailTokens: %w", err)
@@ -44,14 +68,44 @@ func Prepare(ctx context.Context, db DBTX) (*Queries, error) {
 
 func (q *Queries) Close() error {
 	var err error
+	if q.createEmailStmt != nil {
+		if cerr := q.createEmailStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing createEmailStmt: %w", cerr)
+		}
+	}
 	if q.createUserStmt != nil {
 		if cerr := q.createUserStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing createUserStmt: %w", cerr)
 		}
 	}
+	if q.deleteEmailsByUserIDStmt != nil {
+		if cerr := q.deleteEmailsByUserIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing deleteEmailsByUserIDStmt: %w", cerr)
+		}
+	}
 	if q.getAllActiveUsersStmt != nil {
 		if cerr := q.getAllActiveUsersStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getAllActiveUsersStmt: %w", cerr)
+		}
+	}
+	if q.getEmailByGmailMessageIDStmt != nil {
+		if cerr := q.getEmailByGmailMessageIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getEmailByGmailMessageIDStmt: %w", cerr)
+		}
+	}
+	if q.getEmailsByUserIDStmt != nil {
+		if cerr := q.getEmailsByUserIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getEmailsByUserIDStmt: %w", cerr)
+		}
+	}
+	if q.getRecentEmailsStmt != nil {
+		if cerr := q.getRecentEmailsStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getRecentEmailsStmt: %w", cerr)
+		}
+	}
+	if q.getUnnotifiedEmailsByUserIDStmt != nil {
+		if cerr := q.getUnnotifiedEmailsByUserIDStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing getUnnotifiedEmailsByUserIDStmt: %w", cerr)
 		}
 	}
 	if q.getUserByIDStmt != nil {
@@ -62,6 +116,16 @@ func (q *Queries) Close() error {
 	if q.getUserByLineUserIDStmt != nil {
 		if cerr := q.getUserByLineUserIDStmt.Close(); cerr != nil {
 			err = fmt.Errorf("error closing getUserByLineUserIDStmt: %w", cerr)
+		}
+	}
+	if q.markEmailAsNotifiedStmt != nil {
+		if cerr := q.markEmailAsNotifiedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing markEmailAsNotifiedStmt: %w", cerr)
+		}
+	}
+	if q.updateEmailNotifiedStmt != nil {
+		if cerr := q.updateEmailNotifiedStmt.Close(); cerr != nil {
+			err = fmt.Errorf("error closing updateEmailNotifiedStmt: %w", cerr)
 		}
 	}
 	if q.updateUserGmailTokensStmt != nil {
@@ -106,23 +170,39 @@ func (q *Queries) queryRow(ctx context.Context, stmt *sql.Stmt, query string, ar
 }
 
 type Queries struct {
-	db                        DBTX
-	tx                        *sql.Tx
-	createUserStmt            *sql.Stmt
-	getAllActiveUsersStmt     *sql.Stmt
-	getUserByIDStmt           *sql.Stmt
-	getUserByLineUserIDStmt   *sql.Stmt
-	updateUserGmailTokensStmt *sql.Stmt
+	db                              DBTX
+	tx                              *sql.Tx
+	createEmailStmt                 *sql.Stmt
+	createUserStmt                  *sql.Stmt
+	deleteEmailsByUserIDStmt        *sql.Stmt
+	getAllActiveUsersStmt           *sql.Stmt
+	getEmailByGmailMessageIDStmt    *sql.Stmt
+	getEmailsByUserIDStmt           *sql.Stmt
+	getRecentEmailsStmt             *sql.Stmt
+	getUnnotifiedEmailsByUserIDStmt *sql.Stmt
+	getUserByIDStmt                 *sql.Stmt
+	getUserByLineUserIDStmt         *sql.Stmt
+	markEmailAsNotifiedStmt         *sql.Stmt
+	updateEmailNotifiedStmt         *sql.Stmt
+	updateUserGmailTokensStmt       *sql.Stmt
 }
 
 func (q *Queries) WithTx(tx *sql.Tx) *Queries {
 	return &Queries{
-		db:                        tx,
-		tx:                        tx,
-		createUserStmt:            q.createUserStmt,
-		getAllActiveUsersStmt:     q.getAllActiveUsersStmt,
-		getUserByIDStmt:           q.getUserByIDStmt,
-		getUserByLineUserIDStmt:   q.getUserByLineUserIDStmt,
-		updateUserGmailTokensStmt: q.updateUserGmailTokensStmt,
+		db:                              tx,
+		tx:                              tx,
+		createEmailStmt:                 q.createEmailStmt,
+		createUserStmt:                  q.createUserStmt,
+		deleteEmailsByUserIDStmt:        q.deleteEmailsByUserIDStmt,
+		getAllActiveUsersStmt:           q.getAllActiveUsersStmt,
+		getEmailByGmailMessageIDStmt:    q.getEmailByGmailMessageIDStmt,
+		getEmailsByUserIDStmt:           q.getEmailsByUserIDStmt,
+		getRecentEmailsStmt:             q.getRecentEmailsStmt,
+		getUnnotifiedEmailsByUserIDStmt: q.getUnnotifiedEmailsByUserIDStmt,
+		getUserByIDStmt:                 q.getUserByIDStmt,
+		getUserByLineUserIDStmt:         q.getUserByLineUserIDStmt,
+		markEmailAsNotifiedStmt:         q.markEmailAsNotifiedStmt,
+		updateEmailNotifiedStmt:         q.updateEmailNotifiedStmt,
+		updateUserGmailTokensStmt:       q.updateUserGmailTokensStmt,
 	}
 }

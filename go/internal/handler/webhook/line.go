@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/huavcjj/flux/internal/service/notification"
@@ -17,10 +18,10 @@ type LineWebhookHandler struct {
 	channelSecret       string
 }
 
-func NewLineWebhookHandler(notificationService *notification.Service, channelSecret string) *LineWebhookHandler {
+func NewLineWebhookHandler(notificationService *notification.Service) *LineWebhookHandler {
 	return &LineWebhookHandler{
 		notificationService: notificationService,
-		channelSecret:       channelSecret,
+		channelSecret:       os.Getenv("LINE_CHANNEL_SECRET"),
 	}
 }
 

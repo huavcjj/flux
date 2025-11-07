@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"time"
 
+	email_repo "github.com/huavcjj/flux/internal/domain/email"
 	gmail_repo "github.com/huavcjj/flux/internal/domain/gmail"
 	line_repo "github.com/huavcjj/flux/internal/domain/line"
 	user_repo "github.com/huavcjj/flux/internal/domain/user"
@@ -16,17 +18,16 @@ type Service struct {
 	gmailRepo   gmail_repo.GmailRepo
 	lineRepo    line_repo.LineRepo
 	userRepo    user_repo.UserRepo
-	pubsubTopic string
-	// 認証待ちのユーザーを一時的に保存（本来はRedisなどを使う）
+	emailRepo   email_repo.EmailRepo
 	pendingAuth map[string]bool
 }
 
-func NewService(gmailRepo gmail_repo.GmailRepo, lineRepo line_repo.LineRepo, userRepo user_repo.UserRepo, pubsubTopic string) *Service {
+func NewService(gmailRepo gmail_repo.GmailRepo, lineRepo line_repo.LineRepo, userRepo user_repo.UserRepo, emailRepo email_repo.EmailRepo) *Service {
 	return &Service{
 		gmailRepo:   gmailRepo,
 		lineRepo:    lineRepo,
 		userRepo:    userRepo,
-		pubsubTopic: pubsubTopic,
+		emailRepo:   emailRepo,
 		pendingAuth: make(map[string]bool),
 	}
 }
@@ -322,15 +323,20 @@ func (s *Service) CompleteGmailAuth(ctx context.Context, userID string, authCode
 	}
 
 	// Gmail Watch APIを登録（メールボックスの変更を監視）
-	if s.pubsubTopic != "" {
-		if err := s.gmailRepo.WatchMailbox(ctx, token, s.pubsubTopic); err != nil {
+	pubsubTopic := os.Getenv("PUBSUB_TOPIC")
+	if pubsubTopic == "" {
+		pubsubTopic = "projects/line-gmail-bot/topics/gmail-notifications"
+	}
+
+	if pubsubTopic != "" {
+		if err := s.gmailRepo.WatchMailbox(ctx, token, pubsubTopic); err != nil {
 			slog.Warn("failed to setup Gmail watch, push notifications may not work",
 				"user_id", userID,
 				"error", err,
 			)
 			// Watch APIの失敗は致命的ではないので、処理を続行
 		} else {
-			slog.Info("Gmail watch setup successfully", "user_id", userID, "topic", s.pubsubTopic)
+			slog.Info("Gmail watch setup successfully", "user_id", userID, "topic", pubsubTopic)
 		}
 	}
 

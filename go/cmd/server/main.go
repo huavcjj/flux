@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -12,14 +11,9 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/go-sql-driver/mysql"
-	"github.com/huavcjj/flux/internal/domain/gmail"
+	"github.com/huavcjj/flux/internal/di"
 	"github.com/huavcjj/flux/internal/handler/oauth"
 	"github.com/huavcjj/flux/internal/handler/webhook"
-	gmail_repo "github.com/huavcjj/flux/internal/infrastructure/repository/gmail"
-	line_repo "github.com/huavcjj/flux/internal/infrastructure/repository/line"
-	user_repo "github.com/huavcjj/flux/internal/infrastructure/repository/user"
-	"github.com/huavcjj/flux/internal/service/notification"
 	"github.com/joho/godotenv"
 )
 
@@ -29,80 +23,37 @@ func main() {
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(),
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT,
-	)
+		syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer cancel()
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-
-	lineChannelToken := os.Getenv("LINE_CHANNEL_TOKEN")
-	lineChannelSecret := os.Getenv("LINE_CHANNEL_SECRET")
-	gmailCredentialsPath := os.Getenv("GMAIL_CREDENTIALS_PATH")
-	pubsubTopic := os.Getenv("PUBSUB_TOPIC")
-
-	if pubsubTopic == "" {
-		pubsubTopic = "projects/line-gmail-bot/topics/gmail-notifications"
-	}
-
-	slog.Info("environment variables loaded",
-		"line_token_set", lineChannelToken != "",
-		"line_secret_set", lineChannelSecret != "",
-		"pubsub_topic", pubsubTopic,
-	)
-
-	var gmailRepo gmail.GmailRepo
-	if gmailCredentialsPath != "" {
-		var err error
-		gmailRepo, err = gmail_repo.NewGmailRepo(ctx, gmailCredentialsPath)
-		if err != nil {
-			slog.Warn("failed to initialize Gmail repository, continuing without Gmail", "error", err)
-		} else {
-			slog.Info("Gmail repository initialized successfully")
-		}
-	} else {
-		slog.Warn("Gmail credentials not configured, Gmail features will be disabled")
-	}
-
-	lineRepo, err := line_repo.NewLineRepo(lineChannelToken)
-	if err != nil {
-		slog.Error("failed to initialize LINE repository", "error", err)
+	if err := run(ctx); err != nil {
+		slog.Error("application error", "error", err)
 		os.Exit(1)
 	}
+}
 
-	// Database接続
-	dbHost := os.Getenv("DB_HOST")
-	dbPort := os.Getenv("DB_PORT")
-	dbUser := os.Getenv("DB_USER")
-	dbPassword := os.Getenv("DB_PASSWORD")
-	dbName := os.Getenv("DB_NAME")
+func run(ctx context.Context) error {
+	port := getEnv("PORT", "8080")
 
-	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true", dbUser, dbPassword, dbHost, dbPort, dbName)
-	db, err := sql.Open("mysql", dsn)
+	cfg := di.Config{
+		LineChannelToken:     os.Getenv("LINE_CHANNEL_TOKEN"),
+		GmailCredentialsPath: os.Getenv("GMAIL_CREDENTIALS_PATH"),
+		DBHost:               os.Getenv("DB_HOST"),
+		DBPort:               os.Getenv("DB_PORT"),
+		DBUser:               os.Getenv("DB_USER"),
+		DBPassword:           os.Getenv("DB_PASSWORD"),
+		DBName:               os.Getenv("DB_NAME"),
+	}
+
+	container, err := di.NewContainer(ctx, cfg)
 	if err != nil {
-		slog.Error("failed to connect to database", "error", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to initialize container: %w", err)
 	}
-	defer db.Close()
+	defer container.Close()
 
-	if err := db.Ping(); err != nil {
-		slog.Warn("database connection check failed, continuing without DB features", "error", err)
-	} else {
-		slog.Info("database connected successfully")
-	}
-
-	userRepo := user_repo.NewUserRepo(db)
-
-	notificationService := notification.NewService(gmailRepo, lineRepo, userRepo, pubsubTopic)
-
-	lineWebhookHandler := webhook.NewLineWebhookHandler(notificationService, lineChannelSecret)
-	pubsubWebhookHandler := webhook.NewPubSubWebhookHandler(notificationService)
-	gmailOAuthHandler := oauth.NewGmailOAuthHandler(notificationService)
+	lineWebhookHandler := webhook.NewLineWebhookHandler(container.NotificationService)
+	pubsubWebhookHandler := webhook.NewPubSubWebhookHandler(container.NotificationService)
+	gmailOAuthHandler := oauth.NewGmailOAuthHandler(container.NotificationService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/webhook/line", lineWebhookHandler.HandleWebhook)
@@ -113,27 +64,43 @@ func main() {
 		fmt.Fprintf(w, "OK")
 	})
 
-	httpServer := &http.Server{
-		Addr:    ":" + port,
-		Handler: mux,
+	server := &http.Server{
+		Addr:         ":" + port,
+		Handler:      mux,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 15 * time.Second,
+		IdleTimeout:  60 * time.Second,
 	}
 
+	serverErr := make(chan error, 1)
 	go func() {
-		slog.Info(fmt.Sprintf("starting Gmail-LINE bot server on port %s...", port))
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("failed to start server", "error", err)
+		slog.Info("starting server", "address", server.Addr)
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
 		}
 	}()
 
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+		slog.Info("shutting down...")
+	case err := <-serverErr:
+		return fmt.Errorf("server error: %w", err)
+	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	slog.Info("shutting down server gracefully...")
-	if err := httpServer.Shutdown(shutdownCtx); err != nil {
-		slog.Error("failed to shutdown server gracefully", "error", err)
-		os.Exit(1)
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown error: %w", err)
 	}
-	slog.Info("server shutdown completed")
+
+	slog.Info("shutdown completed")
+	return nil
+}
+
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
 }
