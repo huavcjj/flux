@@ -17,6 +17,18 @@ import (
 const (
 	maxUnreadEmails = 10
 	maxPushEmails   = 5
+
+	msgGmailUnavailable     = "Gmail機能は現在利用できません。設定を確認してください。"
+	msgGmailUnavailableAuth = "Gmail機能は現在利用できません。管理者にお問い合わせください。"
+	msgAuthRequired         = "Gmail連携が必要です。「Gmail連携」を送信して認証してください。"
+	msgNoUnreadEmails       = "📭 未読メールはありません"
+	msgNoEmails             = "📭 メールはありません"
+	msgAuthComplete         = "✅ Gmail連携が完了しました！\n\n新着メールが届くと自動で通知されます。\n\n手動確認: 「未読mail」または「mail一覧」を送信"
+	msgAuthStart            = "Gmail連携を開始します。\n\n次のメッセージのURLからGoogleアカウントで認証してください。\n\n認証が完了すると自動的に連携されます。"
+
+	titleUnreadEmails = "📬 未読メール"
+	titleLatestEmails = "📨 最新メール"
+	titleNewEmail     = "📧 新着メール"
 )
 
 type Service struct {
@@ -73,12 +85,12 @@ func (s *Service) getAuthenticatedUser(ctx context.Context, userID string) (*use
 
 func (s *Service) SendUnreadEmailList(ctx context.Context, userID string) error {
 	if s.gmailRepo == nil {
-		return s.lineRepo.PushMessage(ctx, userID, "Gmail機能は現在利用できません。設定を確認してください。")
+		return s.lineRepo.PushMessage(ctx, userID, msgGmailUnavailable)
 	}
 
 	user, err := s.getAuthenticatedUser(ctx, userID)
 	if err != nil {
-		return s.lineRepo.PushMessage(ctx, userID, "Gmail連携が必要です。「Gmail連携」を送信して認証してください。")
+		return s.lineRepo.PushMessage(ctx, userID, msgAuthRequired)
 	}
 
 	messages, err := s.gmailRepo.GetUnreadMessages(ctx, s.getUserToken(user), maxUnreadEmails)
@@ -87,26 +99,21 @@ func (s *Service) SendUnreadEmailList(ctx context.Context, userID string) error 
 	}
 
 	if len(messages) == 0 {
-		return s.lineRepo.PushMessage(ctx, userID, "📭 未読メールはありません")
-	}
-
-	text := fmt.Sprintf("📬 未読メール (%d件)\n\n", len(messages))
-	for i, msg := range messages {
-		text += fmt.Sprintf("%d. %s\n件名: %s\n%s\n\n", i+1, msg.From, msg.Subject, msg.Snippet)
+		return s.lineRepo.PushMessage(ctx, userID, msgNoUnreadEmails)
 	}
 
 	slog.Info("unread email list sent", "user_id", userID, "count", len(messages))
-	return s.lineRepo.PushMessage(ctx, userID, text)
+	return s.lineRepo.PushMessage(ctx, userID, s.formatEmailList(titleUnreadEmails, messages))
 }
 
 func (s *Service) SendEmailList(ctx context.Context, userID string, maxResults int64) error {
 	if s.gmailRepo == nil {
-		return s.lineRepo.PushMessage(ctx, userID, "Gmail機能は現在利用できません。設定を確認してください。")
+		return s.lineRepo.PushMessage(ctx, userID, msgGmailUnavailable)
 	}
 
 	user, err := s.getAuthenticatedUser(ctx, userID)
 	if err != nil {
-		return s.lineRepo.PushMessage(ctx, userID, "Gmail連携が必要です。「Gmail連携」を送信して認証してください。")
+		return s.lineRepo.PushMessage(ctx, userID, msgAuthRequired)
 	}
 
 	messages, err := s.gmailRepo.GetLatestMessages(ctx, s.getUserToken(user), maxResults)
@@ -115,46 +122,27 @@ func (s *Service) SendEmailList(ctx context.Context, userID string, maxResults i
 	}
 
 	if len(messages) == 0 {
-		return s.lineRepo.PushMessage(ctx, userID, "📭 メールはありません")
-	}
-
-	text := fmt.Sprintf("📨 最新メール (%d件)\n\n", len(messages))
-	for i, msg := range messages {
-		text += fmt.Sprintf("%d. %s\n件名: %s\n%s\n\n", i+1, msg.From, msg.Subject, msg.Snippet)
+		return s.lineRepo.PushMessage(ctx, userID, msgNoEmails)
 	}
 
 	slog.Info("email list sent", "user_id", userID, "count", len(messages))
-	return s.lineRepo.PushMessage(ctx, userID, text)
+	return s.lineRepo.PushMessage(ctx, userID, s.formatEmailList(titleLatestEmails, messages))
 }
 
 func (s *Service) StartGmailAuth(ctx context.Context, userID string) error {
 	if s.gmailRepo == nil {
-		return s.lineRepo.PushMessage(ctx, userID, "Gmail機能は現在利用できません。管理者にお問い合わせください。")
+		return s.lineRepo.PushMessage(ctx, userID, msgGmailUnavailableAuth)
 	}
 
 	s.pendingAuth[userID] = true
 	authURL := s.gmailRepo.GetAuthURL(userID)
 
-	instructionMsg := `Gmail連携を開始します。
-
-【重要】以下の手順で認証してください：
-
-1. 次のメッセージのURLを長押し
-2. 「Safariで開く」または「Chromeで開く」を選択
-3. Googleアカウントで認証
-
-※ LINEアプリ内で開くとエラーになります`
-
-	if err := s.lineRepo.PushMessage(ctx, userID, instructionMsg); err != nil {
+	if err := s.lineRepo.PushMessage(ctx, userID, msgAuthStart); err != nil {
 		return fmt.Errorf("failed to send instruction: %w", err)
 	}
 
 	if err := s.lineRepo.PushMessage(ctx, userID, authURL); err != nil {
 		return fmt.Errorf("failed to send auth URL: %w", err)
-	}
-
-	if err := s.lineRepo.PushMessage(ctx, userID, "認証が完了すると自動的に連携されます。"); err != nil {
-		return fmt.Errorf("failed to send completion message: %w", err)
 	}
 
 	slog.Info("Gmail auth started", "user_id", userID)
@@ -197,8 +185,7 @@ func (s *Service) CompleteGmailAuth(ctx context.Context, userID, authCode string
 
 	delete(s.pendingAuth, userID)
 
-	successMsg := "✅ Gmail連携が完了しました！\n\n新着メールが届くと自動で通知されます。\n\n手動確認: 「未読mail」または「mail一覧」を送信"
-	if err := s.lineRepo.PushMessage(ctx, userID, successMsg); err != nil {
+	if err := s.lineRepo.PushMessage(ctx, userID, msgAuthComplete); err != nil {
 		return fmt.Errorf("failed to send success message: %w", err)
 	}
 
@@ -224,8 +211,7 @@ func (s *Service) ProcessGmailPushNotification(ctx context.Context) error {
 		}
 
 		for _, msg := range messages {
-			text := fmt.Sprintf("📧 新着メール\n\n差出人: %s\n件名: %s\n\n%s", msg.From, msg.Subject, msg.Snippet)
-			if err := s.lineRepo.PushMessage(ctx, user.LineUserID, text); err != nil {
+			if err := s.lineRepo.PushMessage(ctx, user.LineUserID, s.formatNewEmail(msg)); err != nil {
 				slog.Error("failed to send LINE notification", "user_id", user.LineUserID, "message_id", msg.ID, "error", err)
 				continue
 			}
@@ -234,4 +220,16 @@ func (s *Service) ProcessGmailPushNotification(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (s *Service) formatEmailList(title string, messages []*gmailRepo.Message) string {
+	text := fmt.Sprintf("%s (%d件)\n\n", title, len(messages))
+	for i, msg := range messages {
+		text += fmt.Sprintf("%d. %s\n件名: %s\n%s\n\n", i+1, msg.From, msg.Subject, msg.Snippet)
+	}
+	return text
+}
+
+func (s *Service) formatNewEmail(msg *gmailRepo.Message) string {
+	return fmt.Sprintf("%s\n\n差出人: %s\n件名: %s\n\n%s", titleNewEmail, msg.From, msg.Subject, msg.Snippet)
 }
