@@ -20,9 +20,6 @@ func NewGmailOAuthHandler(notificationService *notification.Service) *GmailOAuth
 }
 
 func (h *GmailOAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Request) {
-	ctx := context.Background()
-
-	// Get authorization code and state (user ID) from query params
 	code := r.URL.Query().Get("code")
 	state := r.URL.Query().Get("state")
 
@@ -38,56 +35,56 @@ func (h *GmailOAuthHandler) HandleCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Complete the authentication
+	ctx := context.Background()
 	if err := h.notificationService.CompleteGmailAuth(ctx, state, code); err != nil {
-		slog.Error("failed to complete Gmail auth",
-			"user_id", state,
-			"error", err,
-		)
-		w.WriteHeader(http.StatusOK)
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>認証エラー</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-        .error { color: #d32f2f; }
-    </style>
-</head>
-<body>
-    <h1 class="error">❌ 認証に失敗しました</h1>
-    <p>LINEで「Gmail連携」を送信して、もう一度やり直してください。</p>
-    <p>エラー: %s</p>
-</body>
-</html>
-`, err.Error())
+		slog.Error("failed to complete Gmail auth", "user_id", state, "error", err)
+		h.renderError(w, err)
 		return
 	}
 
-	// Success - show a nice page
-	w.WriteHeader(http.StatusOK)
+	h.renderSuccess(w)
+}
+
+func (h *GmailOAuthHandler) renderError(w http.ResponseWriter, err error) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `
-<!DOCTYPE html>
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintf(w, `<!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>認証完了</title>
-    <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
-        .success { color: #388e3c; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>認証エラー</title>
+<style>
+body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+.error { color: #d32f2f; }
+</style>
 </head>
 <body>
-    <h1 class="success">✅ Gmail連携が完了しました！</h1>
-    <p>このページを閉じて、LINEに戻ってください。</p>
-    <p>「未読mail」または「mail一覧」を送信して、メールを確認できます。</p>
+<h1 class="error">❌ 認証に失敗しました</h1>
+<p>LINEで「Gmail連携」を送信して、もう一度やり直してください。</p>
+<p>エラー: %s</p>
 </body>
-</html>
-`)
+</html>`, err.Error())
+}
+
+func (h *GmailOAuthHandler) renderSuccess(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprint(w, `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>認証完了</title>
+<style>
+body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+.success { color: #388e3c; }
+</style>
+</head>
+<body>
+<h1 class="success">✅ Gmail連携が完了しました！</h1>
+<p>このページを閉じて、LINEに戻ってください。</p>
+<p>「未読mail」または「mail一覧」を送信して、メールを確認できます。</p>
+</body>
+</html>`)
 }

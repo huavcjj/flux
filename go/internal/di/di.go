@@ -59,9 +59,7 @@ func NewContainer(ctx context.Context, cfg Config) (*Container, error) {
 
 	gmailRepo, err := gmailrepo.NewGmailRepo(ctx, cfg.GmailCredentialsPath)
 	if err != nil {
-		slog.Warn("failed to initialize Gmail repository", "error", err)
-	} else {
-		slog.Info("Gmail repository initialized")
+		return nil, fmt.Errorf("failed to initialize Gmail repository: %w", err)
 	}
 
 	lineRepo, err := linerepo.NewLineRepo(cfg.LineChannelToken)
