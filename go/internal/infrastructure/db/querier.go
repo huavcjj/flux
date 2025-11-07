@@ -12,12 +12,12 @@ import (
 type Querier interface {
 	CreateEmail(ctx context.Context, arg CreateEmailParams) (sql.Result, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (sql.Result, error)
-	DeleteEmailsByUserID(ctx context.Context, userID int64) error
+	DeleteEmailsByUserID(ctx context.Context, userID string) error
 	GetAllActiveUsers(ctx context.Context) ([]User, error)
 	GetEmailByGmailMessageID(ctx context.Context, gmailMessageID string) (Email, error)
-	GetEmailsByUserID(ctx context.Context, userID int64) ([]Email, error)
+	GetEmailsByUserID(ctx context.Context, userID string) ([]Email, error)
 	GetRecentEmails(ctx context.Context, arg GetRecentEmailsParams) ([]Email, error)
-	GetUnnotifiedEmailsByUserID(ctx context.Context, userID int64) ([]Email, error)
+	GetUnnotifiedEmailsByUserID(ctx context.Context, userID string) ([]Email, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	GetUserByLineUserID(ctx context.Context, lineUserID string) (User, error)
 	MarkEmailAsNotified(ctx context.Context, gmailMessageID string) error

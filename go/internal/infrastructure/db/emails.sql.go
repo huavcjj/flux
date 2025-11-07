@@ -26,7 +26,7 @@ INSERT INTO emails (
 `
 
 type CreateEmailParams struct {
-	UserID         int64          `db:"user_id" json:"user_id"`
+	UserID         string         `db:"user_id" json:"user_id"`
 	GmailMessageID string         `db:"gmail_message_id" json:"gmail_message_id"`
 	SenderEmail    string         `db:"sender_email" json:"sender_email"`
 	Subject        sql.NullString `db:"subject" json:"subject"`
@@ -52,7 +52,7 @@ DELETE FROM emails
 WHERE user_id = ?
 `
 
-func (q *Queries) DeleteEmailsByUserID(ctx context.Context, userID int64) error {
+func (q *Queries) DeleteEmailsByUserID(ctx context.Context, userID string) error {
 	_, err := q.exec(ctx, q.deleteEmailsByUserIDStmt, deleteEmailsByUserID, userID)
 	return err
 }
@@ -87,7 +87,7 @@ WHERE user_id = ?
 ORDER BY received_at DESC
 `
 
-func (q *Queries) GetEmailsByUserID(ctx context.Context, userID int64) ([]Email, error) {
+func (q *Queries) GetEmailsByUserID(ctx context.Context, userID string) ([]Email, error) {
 	rows, err := q.query(ctx, q.getEmailsByUserIDStmt, getEmailsByUserID, userID)
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ ORDER BY received_at DESC
 `
 
 type GetRecentEmailsParams struct {
-	UserID     int64     `db:"user_id" json:"user_id"`
+	UserID     string    `db:"user_id" json:"user_id"`
 	ReceivedAt time.Time `db:"received_at" json:"received_at"`
 }
 
@@ -172,7 +172,7 @@ WHERE user_id = ? AND is_notified = false
 ORDER BY received_at DESC
 `
 
-func (q *Queries) GetUnnotifiedEmailsByUserID(ctx context.Context, userID int64) ([]Email, error) {
+func (q *Queries) GetUnnotifiedEmailsByUserID(ctx context.Context, userID string) ([]Email, error) {
 	rows, err := q.query(ctx, q.getUnnotifiedEmailsByUserIDStmt, getUnnotifiedEmailsByUserID, userID)
 	if err != nil {
 		return nil, err

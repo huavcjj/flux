@@ -211,10 +211,57 @@ func (s *Service) ProcessGmailPushNotification(ctx context.Context) error {
 		}
 
 		for _, msg := range messages {
+			existingEmail, err := s.emailRepo.GetEmailByGmailMessageID(ctx, msg.ID)
+			if err != nil {
+				slog.Error("failed to check email existence", "message_id", msg.ID, "error", err)
+				continue
+			}
+
+			if existingEmail != nil {
+				continue
+			}
+
+			email := &emailRepo.Email{
+				UserID:         user.ID,
+				GmailMessageID: msg.ID,
+				SenderEmail:    msg.From,
+				Subject:        &msg.Subject,
+				BodyPreview:    &msg.Snippet,
+				ReceivedAt:     msg.Date,
+				IsNotified:     false,
+			}
+
+			if err := s.emailRepo.CreateEmail(ctx, email); err != nil {
+				slog.Error("failed to create email record", "message_id", msg.ID, "error", err)
+				continue
+			}
+		}
+
+		unnotifiedEmails, err := s.emailRepo.GetUnnotifiedEmailsByUserID(ctx, user.ID)
+		if err != nil {
+			slog.Error("failed to get unnotified emails", "user_id", user.LineUserID, "error", err)
+			continue
+		}
+
+		for _, email := range unnotifiedEmails {
+			msg := &gmailRepo.Message{
+				ID:      email.GmailMessageID,
+				From:    email.SenderEmail,
+				Subject: *email.Subject,
+				Snippet: *email.BodyPreview,
+				Date:    email.ReceivedAt,
+			}
+
 			if err := s.lineRepo.PushMessage(ctx, user.LineUserID, s.formatNewEmail(msg)); err != nil {
 				slog.Error("failed to send LINE notification", "user_id", user.LineUserID, "message_id", msg.ID, "error", err)
 				continue
 			}
+
+			if err := s.emailRepo.MarkEmailAsNotified(ctx, email.GmailMessageID); err != nil {
+				slog.Error("failed to mark email as notified", "message_id", email.GmailMessageID, "error", err)
+				continue
+			}
+
 			slog.Info("push notification sent", "user_id", user.LineUserID, "message_id", msg.ID, "subject", msg.Subject)
 		}
 	}

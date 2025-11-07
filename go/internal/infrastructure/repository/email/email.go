@@ -60,7 +60,7 @@ func (r *emailRepo) GetEmailByGmailMessageID(ctx context.Context, gmailMessageID
 	return r.dbEmailToDomain(dbEmail), nil
 }
 
-func (r *emailRepo) GetEmailsByUserID(ctx context.Context, userID int64) ([]email_domain.Email, error) {
+func (r *emailRepo) GetEmailsByUserID(ctx context.Context, userID string) ([]email_domain.Email, error) {
 	dbEmails, err := r.queries.GetEmailsByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get emails by user id: %w", err)
@@ -74,7 +74,7 @@ func (r *emailRepo) GetEmailsByUserID(ctx context.Context, userID int64) ([]emai
 	return emails, nil
 }
 
-func (r *emailRepo) GetUnnotifiedEmailsByUserID(ctx context.Context, userID int64) ([]email_domain.Email, error) {
+func (r *emailRepo) GetUnnotifiedEmailsByUserID(ctx context.Context, userID string) ([]email_domain.Email, error) {
 	dbEmails, err := r.queries.GetUnnotifiedEmailsByUserID(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get unnotified emails by user id: %w", err)
@@ -88,7 +88,7 @@ func (r *emailRepo) GetUnnotifiedEmailsByUserID(ctx context.Context, userID int6
 	return emails, nil
 }
 
-func (r *emailRepo) GetRecentEmails(ctx context.Context, userID int64, since time.Time) ([]email_domain.Email, error) {
+func (r *emailRepo) GetRecentEmails(ctx context.Context, userID string, since time.Time) ([]email_domain.Email, error) {
 	dbEmails, err := r.queries.GetRecentEmails(ctx, db.GetRecentEmailsParams{
 		UserID:     userID,
 		ReceivedAt: since,
@@ -114,7 +114,7 @@ func (r *emailRepo) MarkEmailAsNotified(ctx context.Context, gmailMessageID stri
 	return nil
 }
 
-func (r *emailRepo) DeleteEmailsByUserID(ctx context.Context, userID int64) error {
+func (r *emailRepo) DeleteEmailsByUserID(ctx context.Context, userID string) error {
 	err := r.queries.DeleteEmailsByUserID(ctx, userID)
 	if err != nil {
 		return fmt.Errorf("failed to delete emails by user id: %w", err)

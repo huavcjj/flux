@@ -1,7 +1,7 @@
 -- migrate:up
 CREATE TABLE emails (
     id SERIAL PRIMARY KEY,
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id VARCHAR(36) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     gmail_message_id VARCHAR(255) NOT NULL UNIQUE,
     sender_email VARCHAR(255) NOT NULL,
     subject VARCHAR(500),

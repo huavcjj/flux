@@ -11,7 +11,7 @@ import (
 
 type Email struct {
 	ID             uint64         `db:"id" json:"id"`
-	UserID         int64          `db:"user_id" json:"user_id"`
+	UserID         string         `db:"user_id" json:"user_id"`
 	GmailMessageID string         `db:"gmail_message_id" json:"gmail_message_id"`
 	SenderEmail    string         `db:"sender_email" json:"sender_email"`
 	Subject        sql.NullString `db:"subject" json:"subject"`

@@ -33,7 +33,10 @@ func main() {
 }
 
 func run(ctx context.Context) error {
-	port := getEnv("PORT", "8080")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
 
 	cfg := di.Config{
 		LineChannelToken:     os.Getenv("LINE_CHANNEL_TOKEN"),
@@ -96,11 +99,4 @@ func run(ctx context.Context) error {
 
 	slog.Info("shutdown completed")
 	return nil
-}
-
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
 }
